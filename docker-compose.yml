@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: eventsphere-postgres
+    environment:
+      POSTGRES_DB: eventsphere
+      POSTGRES_USER: eventsphere
+      POSTGRES_PASSWORD: eventsphere
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eventsphere"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    container_name: eventsphere-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: eventsphere-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: eventsphere
+      RABBITMQ_DEFAULT_PASS: eventsphere
+    ports:
+      - "5672:5672" # AMQP protocol
+      - "15672:15672" # Management UI
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
