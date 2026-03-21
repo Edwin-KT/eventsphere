@@ -1,0 +1,26 @@
+### Register
+POST http://localhost:8080/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "password123",
+  "fullName": "Test User"
+}
+
+### Login
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "password123"
+}
+
+### Refresh
+POST http://localhost:8080/api/auth/refresh
+X-Refresh-Token: bb02bdfa-baa3-4d76-933c-9694c47c75ee
+
+### Logout
+POST http://localhost:8080/api/auth/logout
+X-Refresh-Token: bb02bdfa-baa3-4d76-933c-9694c47c75ee
