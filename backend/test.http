@@ -1,26 +1,56 @@
-### Register
-POST http://localhost:8080/api/auth/register
-Content-Type: application/json
-
-{
-  "email": "test@example.com",
-  "password": "password123",
-  "fullName": "Test User"
-}
-
-### Login
+### Login as organizer
 POST http://localhost:8080/api/auth/login
 Content-Type: application/json
 
 {
-  "email": "test@example.com",
+  "email": "organizer@example.com",
   "password": "password123"
 }
 
-### Refresh
-POST http://localhost:8080/api/auth/refresh
-X-Refresh-Token: bb02bdfa-baa3-4d76-933c-9694c47c75ee
+> {%
+    client.global.set("accessToken", response.body.accessToken);
+%}
 
-### Logout
-POST http://localhost:8080/api/auth/logout
-X-Refresh-Token: bb02bdfa-baa3-4d76-933c-9694c47c75ee
+### Create event
+POST http://localhost:8080/api/events
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJvcmdhbml6ZXJAZXhhbXBsZS5jb20iLCJ1c2VySWQiOiIyNGQyYmY5OS03NTQzLTRiYWYtODdlYi1jMmQzMTExMDNiNTIiLCJyb2xlIjoiT1JHQU5JWkVSIiwiaWF0IjoxNzc1NDA3OTc2LCJleHAiOjE3NzU0MDg4NzZ9.0ODkJJG_0YPWHysv3wQZReQ71EYnsOQ7AiVcPSn8eR4uDw6kekYhHjseduAdREjF
+
+{
+  "title": "Spring Boot Conference",
+  "description": "A great conference",
+  "location": "Bucharest",
+  "eventDate": "2026-12-01T10:00:00"
+}
+
+### Get all events
+GET http://localhost:8080/api/events
+
+
+### Login as organizer
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "organizer@example.com",
+  "password": "password123"
+}
+
+### Get all events (no auth needed)
+GET http://localhost:8080/api/events
+
+### Get single event
+GET http://localhost:8080/api/events/f447d661-836e-4497-a6f7-c5e19fbc60e7
+
+### Update event
+PUT http://localhost:8080/api/events/f447d661-836e-4497-a6f7-c5e19fbc60e7
+Content-Type: application/json
+Authorization: Bearer {{accessToken}}
+
+{
+  "title": "Spring Boot Conference 2026"
+}
+
+### Cancel event
+DELETE http://localhost:8080/api/events/f447d661-836e-4497-a6f7-c5e19fbc60e7
+Authorization: Bearer {{accessToken}}
