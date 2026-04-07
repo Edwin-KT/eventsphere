@@ -1,6 +1,9 @@
 package com.eventsphere.backend.events.service;
 
 import com.eventsphere.backend.auth.entity.User;
+import com.eventsphere.backend.common.exception.ConflictException;
+import com.eventsphere.backend.common.exception.ForbiddenException;
+import com.eventsphere.backend.common.exception.ResourceNotFoundException;
 import com.eventsphere.backend.events.dto.CreateEventRequest;
 import com.eventsphere.backend.events.dto.EventResponse;
 import com.eventsphere.backend.events.dto.UpdateEventRequest;
@@ -17,6 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
+
+import static com.eventsphere.backend.events.entity.EventStatus.CANCELLED;
 
 @Service
 @RequiredArgsConstructor
@@ -58,17 +63,21 @@ public class EventService {
     @Transactional(readOnly = true)
     public EventResponse getEventById(UUID id) {
         Event event = eventRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Event not found"));
+                .orElseThrow(() -> ResourceNotFoundException.of("Event", id));
         return EventResponse.fromEntity(event);
     }
 
     @Transactional
     public EventResponse updateEvent(UUID id, UpdateEventRequest request, User organizer) {
+
         Event event = eventRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Event not found"));
+                .orElseThrow(() -> ResourceNotFoundException.of("Event", id));
+
+        if(event.getStatus() == CANCELLED)
+            throw new ConflictException("Event is cancelled");
 
         if (!checkOwnership(event.getOrganizer(), organizer)) {
-            throw new RuntimeException("You don't own this event");
+            throw new ForbiddenException("You are not the organizer of this event");
         }
 
         if(request.getTitle() != null) {
@@ -95,13 +104,13 @@ public class EventService {
     @Transactional
     public void cancelEvent(UUID id, User organizer) {
         Event event = eventRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Event not found"));
+                .orElseThrow(() -> ResourceNotFoundException.of("Event", id));
 
         if (!checkOwnership(event.getOrganizer(), organizer)) {
-            throw new RuntimeException("You don't own this event");
+            throw new ForbiddenException("You are not the organizer of this event");
         }
 
-        event.setStatus(EventStatus.CANCELLED);
+        event.setStatus(CANCELLED);
     }
 
     private boolean checkOwnership(User eventOrganizer, User askingOrganizer){
