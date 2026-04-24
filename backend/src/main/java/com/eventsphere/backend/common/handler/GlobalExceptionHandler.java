@@ -5,6 +5,8 @@ import com.eventsphere.backend.common.exception.AuthException;
 import com.eventsphere.backend.common.exception.ConflictException;
 import com.eventsphere.backend.common.exception.ForbiddenException;
 import com.eventsphere.backend.common.exception.ResourceNotFoundException;
+import com.eventsphere.backend.common.exception.ServiceUnavailableException;
+import com.eventsphere.backend.common.exception.UnprocessableEntityException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -49,6 +51,22 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
                 .body(ErrorResponse.of(409, "Conflict", ex.getMessage()));
+    }
+
+    // 422 — reservation is invalid, expired, or not owned by the requesting user
+    @ExceptionHandler(UnprocessableEntityException.class)
+    public ResponseEntity<ErrorResponse> handleUnprocessableEntityException(UnprocessableEntityException ex) {
+        return ResponseEntity
+                .status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of(422, "Unprocessable Entity", ex.getMessage()));
+    }
+
+    // 503 — Redis unavailable; the caller must not silently swallow this
+    @ExceptionHandler(ServiceUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleServiceUnavailableException(ServiceUnavailableException ex) {
+        return ResponseEntity
+                .status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ErrorResponse.of(503, "Service Unavailable", ex.getMessage()));
     }
 
     // 400 — @Valid bean validation failures
