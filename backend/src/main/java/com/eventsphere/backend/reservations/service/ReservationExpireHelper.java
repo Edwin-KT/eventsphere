@@ -1,5 +1,6 @@
 package com.eventsphere.backend.reservations.service;
 
+import com.eventsphere.backend.reservations.entity.ReservationStatus;
 import com.eventsphere.backend.reservations.repository.ReservationRepository;
 import com.eventsphere.backend.tickets.repository.TicketCategoryRepository;
 import lombok.RequiredArgsConstructor;
@@ -33,7 +34,8 @@ public class ReservationExpireHelper {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void expireOne(UUID reservationId) {
-        int rowsUpdated = reservationRepository.expireIfPending(reservationId);
+        int rowsUpdated = reservationRepository.expireIfPending(
+                reservationId, ReservationStatus.EXPIRED, ReservationStatus.PENDING);
 
         if (rowsUpdated == 0) {
             // Already expired or completed by another instance — nothing to do.

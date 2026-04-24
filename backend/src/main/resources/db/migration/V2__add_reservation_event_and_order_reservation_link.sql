@@ -1,6 +1,8 @@
--- Add event_id to reservations so the API body { eventId, categoryId, quantity } can be persisted
+-- Add event_id to reservations so the API body { eventId, categoryId, quantity } can be persisted.
+-- Nullable to avoid failures if the table already contains rows; the application always sets this
+-- field for every new reservation.
 ALTER TABLE reservations
-    ADD COLUMN event_id UUID NOT NULL REFERENCES events(id);
+    ADD COLUMN event_id UUID REFERENCES events(id);
 
 -- Link orders to the reservation they fulfil
 ALTER TABLE orders

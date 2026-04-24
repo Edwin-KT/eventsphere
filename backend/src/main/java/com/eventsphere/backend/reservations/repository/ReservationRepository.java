@@ -24,10 +24,15 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID> 
      * Conditionally sets a reservation's status to EXPIRED only when it is still PENDING.
      * Returns 1 if the row was updated (this instance owns the expiry), 0 if already processed.
      * This prevents double-release of inventory when multiple scheduler instances run simultaneously.
+     *
+     * <p>Uses enum parameters instead of string literals to guarantee type safety if enum
+     * values are ever renamed.
      */
     @Modifying
-    @Query("UPDATE Reservation r SET r.status = 'EXPIRED' WHERE r.id = :id AND r.status = 'PENDING'")
-    int expireIfPending(@Param("id") UUID id);
+    @Query("UPDATE Reservation r SET r.status = :expired WHERE r.id = :id AND r.status = :pending")
+    int expireIfPending(@Param("id") UUID id,
+                        @Param("expired") ReservationStatus expired,
+                        @Param("pending") ReservationStatus pending);
 
     Optional<Reservation> findByIdAndUserId(UUID id, UUID userId);
 }
