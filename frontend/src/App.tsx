@@ -1135,10 +1135,10 @@ function decodeJwt(token: string | null): JwtClaims | null {
 }
 
 function isTokenExpired(token: string | null) {
-  const claims = decodeJwt(token)
   if (!token) {
     return false
   }
+  const claims = decodeJwt(token)
   if (!claims?.exp) {
     return true
   }
