@@ -1165,7 +1165,7 @@ function formatDate(value: string | undefined) {
   }
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) {
-    return value
+    return 'Invalid date'
   }
   return dateFormatter.format(date)
 }
@@ -1186,8 +1186,13 @@ function toDateTimeInput(value?: string) {
 
 async function readErrorMessage(response: Response) {
   try {
-    const data = (await response.json()) as { message?: string }
-    return data?.message ?? response.statusText
+    const data = (await response.json()) as
+      | { message?: string; error?: string }
+      | string
+    if (typeof data === 'string') {
+      return data
+    }
+    return data?.message ?? data?.error ?? response.statusText
   } catch {
     return response.statusText
   }
