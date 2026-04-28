@@ -3,6 +3,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 import type { FormEvent, ReactNode } from 'react'
@@ -86,6 +87,7 @@ const dateFormatter = new Intl.DateTimeFormat('en-US', {
 function App() {
   const route = useHashRoute()
   const [auth, setAuth] = useState<AuthState>(() => loadAuth())
+  const refreshRef = useRef<Promise<AuthTokens | null> | null>(null)
 
   const claims = useMemo(() => decodeJwt(auth.accessToken), [auth.accessToken])
   const isAuthenticated = Boolean(auth.accessToken && auth.refreshToken)
@@ -148,19 +150,32 @@ function App() {
     if (!auth.refreshToken) {
       return null
     }
-    const refreshResponse = await fetch(`${API_BASE}/api/auth/refresh`, {
-      method: 'POST',
-      headers: { 'X-Refresh-Token': auth.refreshToken },
-    })
-
-    if (!refreshResponse.ok) {
-      clearAuth()
-      return null
+    const refreshToken = auth.refreshToken
+    if (refreshRef.current) {
+      return refreshRef.current
     }
+    const refreshPromise = (async () => {
+      const refreshResponse = await fetch(`${API_BASE}/api/auth/refresh`, {
+        method: 'POST',
+        headers: { 'X-Refresh-Token': refreshToken },
+      })
 
-    const tokens = (await refreshResponse.json()) as AuthTokens
-    updateTokens(tokens)
-    return tokens
+      if (!refreshResponse.ok) {
+        clearAuth()
+        return null
+      }
+
+      const tokens = (await refreshResponse.json()) as AuthTokens
+      updateTokens(tokens)
+      return tokens
+    })()
+
+    refreshRef.current = refreshPromise
+    try {
+      return await refreshPromise
+    } finally {
+      refreshRef.current = null
+    }
   }
 
   const logout = async () => {
@@ -1121,8 +1136,11 @@ function decodeJwt(token: string | null): JwtClaims | null {
 
 function isTokenExpired(token: string | null) {
   const claims = decodeJwt(token)
-  if (!claims?.exp) {
+  if (!token) {
     return false
+  }
+  if (!claims?.exp) {
+    return true
   }
   return Date.now() >= claims.exp * 1000
 }
