@@ -765,18 +765,24 @@ function OrganizerHomePage() {
               arrives.
             </p>
           </div>
-          <label className="field">
-            <span>Organizer name</span>
-            <input
-              type="text"
-              value={filterName}
-              onChange={(event) => {
-                setFilterName(event.target.value)
-                setProfileName(event.target.value)
-              }}
-              placeholder="e.g. Alex Carter"
-            />
-          </label>
+          <div className="filter-controls">
+            <label className="field">
+              <span>Organizer name</span>
+              <input
+                type="text"
+                value={filterName}
+                onChange={(event) => setFilterName(event.target.value)}
+                placeholder="e.g. Alex Carter"
+              />
+            </label>
+            <button
+              className="ghost-button"
+              type="button"
+              onClick={() => setProfileName(filterName)}
+            >
+              Save name
+            </button>
+          </div>
         </div>
 
         {status === 'loading' && <LoadingState label="Loading your events..." />}
@@ -1136,7 +1142,7 @@ function decodeJwt(token: string | null): JwtClaims | null {
 
 function isTokenExpired(token: string | null) {
   if (!token) {
-    return false
+    return true
   }
   const claims = decodeJwt(token)
   if (!claims?.exp) {
