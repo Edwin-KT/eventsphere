@@ -9,7 +9,7 @@ import type { FormEvent, ReactNode } from 'react'
 import heroImg from './assets/hero.png'
 import './App.css'
 
-const API_BASE = ''
+const API_BASE = import.meta.env.VITE_API_BASE ?? ''
 
 type EventResponse = {
   id: string
@@ -45,6 +45,7 @@ type JwtClaims = {
   sub?: string
   role?: string
   userId?: string
+  exp?: number
 }
 
 type AuthContextValue = {
@@ -143,6 +144,25 @@ function App() {
     updateTokens(tokens, payload.fullName)
   }
 
+  const refreshTokens = async () => {
+    if (!auth.refreshToken) {
+      return null
+    }
+    const refreshResponse = await fetch(`${API_BASE}/api/auth/refresh`, {
+      method: 'POST',
+      headers: { 'X-Refresh-Token': auth.refreshToken },
+    })
+
+    if (!refreshResponse.ok) {
+      clearAuth()
+      return null
+    }
+
+    const tokens = (await refreshResponse.json()) as AuthTokens
+    updateTokens(tokens)
+    return tokens
+  }
+
   const logout = async () => {
     if (auth.refreshToken) {
       await fetch(`${API_BASE}/api/auth/logout`, {
@@ -155,27 +175,25 @@ function App() {
   }
 
   const authFetch = async (path: string, options: RequestInit = {}) => {
+    let accessToken = auth.accessToken
+    if (isTokenExpired(accessToken)) {
+      const refreshed = await refreshTokens()
+      accessToken = refreshed?.accessToken ?? null
+    }
+
     const headers = new Headers(options.headers)
-    if (auth.accessToken) {
-      headers.set('Authorization', `Bearer ${auth.accessToken}`)
+    if (accessToken) {
+      headers.set('Authorization', `Bearer ${accessToken}`)
     }
     const response = await fetch(`${API_BASE}${path}`, { ...options, headers })
     if (response.status !== 401 || !auth.refreshToken) {
       return response
     }
 
-    const refreshResponse = await fetch(`${API_BASE}/api/auth/refresh`, {
-      method: 'POST',
-      headers: { 'X-Refresh-Token': auth.refreshToken },
-    })
-
-    if (!refreshResponse.ok) {
-      clearAuth()
+    const tokens = await refreshTokens()
+    if (!tokens) {
       return response
     }
-
-    const tokens = (await refreshResponse.json()) as AuthTokens
-    updateTokens(tokens)
 
     const retryHeaders = new Headers(options.headers)
     retryHeaders.set('Authorization', `Bearer ${tokens.accessToken}`)
@@ -281,7 +299,7 @@ function HomePage() {
         size: size.toString(),
       })
       if (from) {
-        params.set('from', `${from}T00:00:00`)
+        params.set('from', from)
       }
 
       try {
@@ -357,7 +375,7 @@ function HomePage() {
             <label className="field">
               <span>From</span>
               <input
-                type="date"
+                type="datetime-local"
                 value={draftFrom}
                 onChange={(event) => setDraftFrom(event.target.value)}
               />
@@ -1099,6 +1117,14 @@ function decodeJwt(token: string | null): JwtClaims | null {
   } catch {
     return null
   }
+}
+
+function isTokenExpired(token: string | null) {
+  const claims = decodeJwt(token)
+  if (!claims?.exp) {
+    return false
+  }
+  return Date.now() >= claims.exp * 1000
 }
 
 function useAuth() {
