@@ -8,6 +8,8 @@ import com.eventsphere.backend.auth.entity.Role;
 import com.eventsphere.backend.auth.entity.User;
 import com.eventsphere.backend.auth.repository.RefreshTokenRepository;
 import com.eventsphere.backend.auth.repository.UserRepository;
+import com.eventsphere.backend.common.exception.AuthException;
+import com.eventsphere.backend.common.exception.ConflictException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -36,7 +38,8 @@ public class AuthService {
     @Transactional
     public AuthResponse register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new IllegalArgumentException("Email already in use");
+            // ConflictException → GlobalExceptionHandler → HTTP 409
+            throw new ConflictException("Email already in use");
         }
 
         User user = User.builder()
@@ -53,10 +56,12 @@ public class AuthService {
     @Transactional
     public AuthResponse login(LoginRequest request) {
         User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new IllegalArgumentException("Invalid credentials"));
+                .orElseThrow(() -> new AuthException("Invalid credentials"));
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            throw new IllegalArgumentException("Invalid credentials");
+            // Same generic message for both "user not found" and "wrong password"
+            // — avoids leaking which emails are registered
+            throw new AuthException("Invalid credentials");
         }
 
         return generateTokenPair(user);
@@ -67,27 +72,28 @@ public class AuthService {
         String tokenHash = hashToken(rawRefreshToken);
 
         RefreshToken refreshToken = refreshTokenRepository.findByTokenHash(tokenHash)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid refresh token"));
+                .orElseThrow(() -> new AuthException("Invalid refresh token"));
 
         if (refreshToken.isRevoked()) {
-            throw new IllegalArgumentException("Refresh token has been revoked");
+            // AuthException → GlobalExceptionHandler → HTTP 401
+            throw new AuthException("Refresh token has been revoked");
         }
 
         if (refreshToken.getExpiresAt().isBefore(LocalDateTime.now())) {
-            throw new IllegalArgumentException("Refresh token has expired");
+            throw new AuthException("Refresh token has expired");
         }
 
-        // Rotation: revoke the old token immediately
+        // Rotation: invalidate the old token before issuing a new pair
         refreshToken.setRevoked(true);
         refreshTokenRepository.save(refreshToken);
 
-        // Issue a fresh pair
         return generateTokenPair(refreshToken.getUser());
     }
 
     @Transactional
     public void logout(String rawRefreshToken) {
         String tokenHash = hashToken(rawRefreshToken);
+        // Silent no-op if the token doesn't exist — idempotent logout
         refreshTokenRepository.findByTokenHash(tokenHash).ifPresent(token -> {
             token.setRevoked(true);
             refreshTokenRepository.save(token);

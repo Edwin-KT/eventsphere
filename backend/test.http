@@ -1,56 +1,369 @@
-### Login as organizer
-POST http://localhost:8080/api/auth/login
+# ============================================================
+# EventSphere — API Test File
+# Run these in order. Each section depends on the one above.
+# IntelliJ: use the green "run" arrow next to each request.
+# VS Code: install the "REST Client" extension.
+# ============================================================
+
+### ============================================================
+### 0. VARIABLES — fill these in as you run requests below
+### ============================================================
+
+@baseUrl = http://localhost:8080
+@organizerEmail = organizer@example.com
+@organizerPassword = password123
+@userEmail = user@example.com
+@userPassword = password123
+
+# Fill these in after running the login requests:
+@organizerToken = PASTE_ORGANIZER_ACCESS_TOKEN_HERE
+@userToken = PASTE_USER_ACCESS_TOKEN_HERE
+
+# Fill these in after creating an event and category:
+@eventId = PASTE_EVENT_ID_HERE
+@categoryId = PASTE_CATEGORY_ID_HERE
+
+
+### ============================================================
+### 1. AUTH — verifying the exception fixes
+### ============================================================
+
+### 1a. Register a new organizer (HTTP 200 — gets token pair)
+POST {{baseUrl}}/api/auth/register
 Content-Type: application/json
 
 {
-  "email": "organizer@example.com",
+  "email": "{{organizerEmail}}",
+  "password": "{{organizerPassword}}",
+  "fullName": "Test Organizer"
+}
+
+---
+
+### 1b. Register same email again → should be HTTP 409 Conflict (not 500)
+### Before the fix this returned 500 — now it returns 409 with "Email already in use"
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{organizerEmail}}",
+  "password": "{{organizerPassword}}",
+  "fullName": "Test Organizer"
+}
+
+---
+
+### 1c. Register a regular user (HTTP 200)
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{userEmail}}",
+  "password": "{{userPassword}}",
+  "fullName": "Test User"
+}
+
+---
+
+### 1d. Login with wrong password → should be HTTP 401 Unauthorized (not 500)
+### Before the fix this returned 500 — now it returns 401 with "Invalid credentials"
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{organizerEmail}}",
+  "password": "wrongpassword"
+}
+
+---
+
+### 1e. Login with non-existent email → HTTP 401 (same generic message, no email enumeration)
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "nobody@example.com",
+  "password": "doesntmatter"
+}
+
+---
+
+### 1f. Login as organizer (HTTP 200 — copy accessToken into @organizerToken above)
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{organizerEmail}}",
+  "password": "{{organizerPassword}}"
+}
+
+---
+
+### 1g. Login as regular user (HTTP 200 — copy accessToken into @userToken above)
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{userEmail}}",
+  "password": "{{userPassword}}"
+}
+
+---
+
+### 1h. Validation error — missing fields → HTTP 400 with fieldErrors map
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "not-an-email",
+  "password": "short"
+}
+
+
+### ============================================================
+### 2. EVENTS — prerequisites for category tests
+### ============================================================
+
+### 2a. Create an event as organizer (HTTP 201 — copy id into @eventId above)
+### Note: the role in DB must be ORGANIZER. If you registered above it's USER.
+### You can UPDATE the role directly in DB:
+###   UPDATE users SET role = 'ORGANIZER' WHERE email = 'organizer@example.com';
+POST {{baseUrl}}/api/events
+Content-Type: application/json
+Authorization: Bearer {{organizerToken}}
+
+{
+  "title": "Spring Boot Conference 2027",
+  "description": "A deep dive into Spring Boot internals",
+  "location": "Bucharest, Romania",
+  "eventDate": "2027-06-15T10:00:00",
+  "imageUrl": "https://example.com/image.jpg"
+}
+
+---
+
+### 2b. Get all published events (HTTP 200 — no auth needed)
+GET {{baseUrl}}/api/events
+
+---
+
+### 2c. Get the specific event we just created (HTTP 200)
+GET {{baseUrl}}/api/events/{{eventId}}
+
+---
+
+### 2d. Try to create event as regular user → HTTP 403 Forbidden
+POST {{baseUrl}}/api/events
+Content-Type: application/json
+Authorization: Bearer {{userToken}}
+
+{
+  "title": "Unauthorized Event",
+  "description": "This should fail",
+  "location": "Cluj",
+  "eventDate": "2027-08-01T10:00:00"
+}
+
+
+### ============================================================
+### 3. TICKET CATEGORIES — main tests for the new code
+### ============================================================
+
+### 3a. Get categories for an event — public, no auth needed (HTTP 200, empty list)
+GET {{baseUrl}}/api/events/{{eventId}}/categories
+
+---
+
+### 3b. Add a General Admission category (HTTP 201 — copy id into @categoryId above)
+POST {{baseUrl}}/api/events/{{eventId}}/categories
+Content-Type: application/json
+Authorization: Bearer {{organizerToken}}
+
+{
+  "name": "General Admission",
+  "price": 99.99,
+  "totalInventory": 100
+}
+
+---
+
+### 3c. Add a VIP category (HTTP 201)
+POST {{baseUrl}}/api/events/{{eventId}}/categories
+Content-Type: application/json
+Authorization: Bearer {{organizerToken}}
+
+{
+  "name": "VIP",
+  "price": 299.99,
+  "totalInventory": 20
+}
+
+---
+
+### 3d. Add an Early Bird category (HTTP 201)
+POST {{baseUrl}}/api/events/{{eventId}}/categories
+Content-Type: application/json
+Authorization: Bearer {{organizerToken}}
+
+{
+  "name": "Early Bird",
+  "price": 49.99,
+  "totalInventory": 50
+}
+
+---
+
+### 3e. Get categories again — should now return all 3 (HTTP 200)
+GET {{baseUrl}}/api/events/{{eventId}}/categories
+
+---
+
+### 3f. Update category name and price (HTTP 200)
+PUT {{baseUrl}}/api/events/{{eventId}}/categories/{{categoryId}}
+Content-Type: application/json
+Authorization: Bearer {{organizerToken}}
+
+{
+  "name": "General Admission — Updated",
+  "price": 89.99
+}
+
+---
+
+### 3g. Increase inventory (HTTP 200 — availableInventory increases by same delta)
+PUT {{baseUrl}}/api/events/{{eventId}}/categories/{{categoryId}}
+Content-Type: application/json
+Authorization: Bearer {{organizerToken}}
+
+{
+  "totalInventory": 150
+}
+
+---
+
+### 3h. Patch only name — price and inventory unchanged (HTTP 200)
+PUT {{baseUrl}}/api/events/{{eventId}}/categories/{{categoryId}}
+Content-Type: application/json
+Authorization: Bearer {{organizerToken}}
+
+{
+  "name": "General Admission — Final Name"
+}
+
+---
+
+### 3i. Validation error — price below minimum (HTTP 400 with fieldErrors)
+POST {{baseUrl}}/api/events/{{eventId}}/categories
+Content-Type: application/json
+Authorization: Bearer {{organizerToken}}
+
+{
+  "name": "Bad Category",
+  "price": 0.00,
+  "totalInventory": 10
+}
+
+---
+
+### 3j. Validation error — missing required fields (HTTP 400 with fieldErrors)
+POST {{baseUrl}}/api/events/{{eventId}}/categories
+Content-Type: application/json
+Authorization: Bearer {{organizerToken}}
+
+{
+  "name": "Incomplete"
+}
+
+---
+
+### 3k. Regular user tries to add a category → HTTP 403 Forbidden
+POST {{baseUrl}}/api/events/{{eventId}}/categories
+Content-Type: application/json
+Authorization: Bearer {{userToken}}
+
+{
+  "name": "Sneaky Category",
+  "price": 10.00,
+  "totalInventory": 5
+}
+
+---
+
+### 3l. No auth at all → HTTP 403
+POST {{baseUrl}}/api/events/{{eventId}}/categories
+Content-Type: application/json
+
+{
+  "name": "No Auth Category",
+  "price": 10.00,
+  "totalInventory": 5
+}
+
+---
+
+### 3m. Category not found (wrong ID) → HTTP 404
+GET {{baseUrl}}/api/events/{{eventId}}/categories/00000000-0000-0000-0000-000000000000
+
+---
+
+### 3n. Event not found → HTTP 404
+GET {{baseUrl}}/api/events/00000000-0000-0000-0000-000000000000/categories
+
+---
+
+### 3o. Delete the General Admission category (HTTP 204 No Content)
+### Works only if no non-cancelled tickets exist for it (safe at this point)
+DELETE {{baseUrl}}/api/events/{{eventId}}/categories/{{categoryId}}
+Authorization: Bearer {{organizerToken}}
+
+---
+
+### 3p. Verify it's gone — list should have 2 categories now (HTTP 200)
+GET {{baseUrl}}/api/events/{{eventId}}/categories
+
+---
+
+### 3q. Delete already-deleted category → HTTP 404
+DELETE {{baseUrl}}/api/events/{{eventId}}/categories/{{categoryId}}
+Authorization: Bearer {{organizerToken}}
+
+
+### ============================================================
+### 4. EDGE CASES — organizer ownership
+### ============================================================
+
+### 4a. Register a second organizer
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "organizer2@example.com",
+  "password": "password123",
+  "fullName": "Second Organizer"
+}
+
+---
+
+### 4b. Login as second organizer (copy token into @organizer2Token)
+### Then manually set role to ORGANIZER in DB for this user too.
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "organizer2@example.com",
   "password": "password123"
 }
 
-> {%
-    client.global.set("accessToken", response.body.accessToken);
-%}
+---
 
-### Create event
-POST http://localhost:8080/api/events
+### 4c. Second organizer tries to add category to first organizer's event → HTTP 403
+### (replace ORGANIZER2_TOKEN with the token from 4b)
+POST {{baseUrl}}/api/events/{{eventId}}/categories
 Content-Type: application/json
-Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJvcmdhbml6ZXJAZXhhbXBsZS5jb20iLCJ1c2VySWQiOiIyNGQyYmY5OS03NTQzLTRiYWYtODdlYi1jMmQzMTExMDNiNTIiLCJyb2xlIjoiT1JHQU5JWkVSIiwiaWF0IjoxNzc1NDA3OTc2LCJleHAiOjE3NzU0MDg4NzZ9.0ODkJJG_0YPWHysv3wQZReQ71EYnsOQ7AiVcPSn8eR4uDw6kekYhHjseduAdREjF
+Authorization: Bearer ORGANIZER2_TOKEN_HERE
 
 {
-  "title": "Spring Boot Conference",
-  "description": "A great conference",
-  "location": "Bucharest",
-  "eventDate": "2026-12-01T10:00:00"
+  "name": "Hostile Takeover Category",
+  "price": 1.00,
+  "totalInventory": 999
 }
-
-### Get all events
-GET http://localhost:8080/api/events
-
-
-### Login as organizer
-POST http://localhost:8080/api/auth/login
-Content-Type: application/json
-
-{
-  "email": "organizer@example.com",
-  "password": "password123"
-}
-
-### Get all events (no auth needed)
-GET http://localhost:8080/api/events
-
-### Get single event
-GET http://localhost:8080/api/events/f447d661-836e-4497-a6f7-c5e19fbc60e7
-
-### Update event
-PUT http://localhost:8080/api/events/f447d661-836e-4497-a6f7-c5e19fbc60e7
-Content-Type: application/json
-Authorization: Bearer {{accessToken}}
-
-{
-  "title": "Spring Boot Conference 2026"
-}
-
-### Cancel event
-DELETE http://localhost:8080/api/events/f447d661-836e-4497-a6f7-c5e19fbc60e7
-Authorization: Bearer {{accessToken}}
